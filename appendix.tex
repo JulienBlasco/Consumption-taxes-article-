@@ -2,13 +2,90 @@
 \counterwithin{figure}{subsection}
 \renewcommand{\thefigure}{\thesubsection.\alph{figure}}
 
+\section{Methodology}
+
+
+\subsection{Scaling with national accounts}
+\label{aux:scaling}
+
+Households' propensities to consume are the first term in \cref{eq:TIR}. Taxable consumption includes all monetary expenditure, excluding rents, which are not subject to consumption taxes. Moreover, loan repayments are considered as savings, not consumption.
+
+\[ prop_i = \frac{hmc_i-rents_i}{dhi_i} \]
+where $hmc$ is household monetary consumption, $rents$ is household expenditure in rentals, $dhi$ is disposable income of household.
+
+Disposable income is the amount of money that households have available for spending after income taxes, social security contributions, and transfers have been accounted for.
+
+After some preprocessing on the data (equivalization, bottom-coding), propensities to consume are scaled according to national accounts data. In order to do a international comparison, micro-data is transformed to reflect the amounts of consumption and income at the national level. Conceptually, this means that micro-data are used to get the shape of consumption (its relative distribution with income), while the total levels of income and consumption are put in accordance with national accounts.
+
+We apply a scaling factor on propensities to consume.
+
+\[ scaled\ prop_{c,y,i} = scaling_{c,y} \cdot prop_{c,y,i} \]
+
+\[ scaling_{c,y} = \frac{CH-R}{I-R_{imputed}} \cdot \frac{\sum_i dhi_i}{\sum_i hmc_i-hmchous_i } \]
+where:
+\begin{itemize}
+\item $CH$ is final consumption expenditure of households\footnote{When this figure was not available, we used expenditure and income of households and non-profit institutions serving households.}
+\item $I$ is gross disposable income of households
+\end{itemize}
+
+In national accounts, services of housing that owners produce for themselves are included in both the consumption expenditure and the income of households. We thus remove those terms from the scaling factor of propensities to consume. For some countries however, information on imputed rentals was missing, so this term was omitted.
+
+These national accounts ratios are stored in a Stata data file, and scaling factors are computed after the preprocessing.
+
+We are now able to compute the tax ratio on each household $i$ in country $c$ at year $y$, that is
+\[ TIR_i = \tau_{c,y} \cdot scaled\ prop_{c,y,i} = \underbrace{\tau_{c,y} \cdot \frac{CH-R}{I-R_{imputed}}}_{macro\ data} \cdot \underbrace{\frac{\sum_i dhi_i}{\sum_i hmc_i-hmchous_i } \cdot prop_i}_{micro\ data}  \]
+
+\subsection{Definition of effective tax rate}
+
+We define tax rates implicitly: instead of using official statutory rates that do not reflect the average rate at which households' consumption is taxed, we use tax revenue and consumption data from national accounts. For each country-year, we compute the ratio between consumption taxes revenue and the amount of taxable consumption. This defines the average effective tax rate on consumption paid by households.
+
+We rely on previous research on implicit tax rates (see \cref{appendix_itrc}), and try to improve existing definitions by defining the effective tax rate as follows:
+\[ \tau_{c,y} = \frac{consumption\ taxes\ revenue}{C - CGW - R} \]
+where $consumption\ taxes\ revenue$ includes all revenue from consumption taxes, including value-added-taxes (or sales taxes if applicable), excise taxes, taxes on specific services, etc. $C$ is the total final consumption expenditure (private consumption and consumption of general government). $CGW$ is the amount of wages of employees paid by general government, and $R = R_{actual} + R_{imputed} =$ are actual and imputed rentals for housing.
+
+It is important to note that the ``final consumption expenditure of households'' includes actual rentals that tenants are paying and imputed rentals that occupying owners are paying to themselves. We need to remove this from the denominator, as it generates no tax revenue.
+
+The government does not purchase its whole consumption. In order to account for the share of its consumption that is self-produced (and thus does not generate tax revenue), we remove the term $CGW$ from the denominator, as per \cite{mendoza1994effective}.
+
+For each country-year, we compute tax rates according to the three available definitions. When some numbers are missing, we impute rates with a regression model based on other tax rates (see \cref{appendix_itrc}).
+
+
+\subsection{Consumption imputation model}
+\label{app:imputation_model}
+
+We use a generalized linear model in order to impute consumption data according to households characteristics. The key issue here is that consumption data will have to be imputed on whole datasets for which there is no observation on expenditure. Therefore, it is necessary to design a model that can be calibrated on some countries and used on others.
+
+In order to achieve that, we apply medianization to all monetary variables (including income, consumption and value of housing). That is, all monetary variables are expressed in proportion of their median values in the dataset. The \textbf{medianized disposable income} is thus:
+\[ \widehat{income}_i = \frac{income_i}{\text{median}_{c,y}(income_i)} \]
+
+The underlying assumption is that the relations between medianized consumption and medianized income are similar in every country, account taken of other individuals determinants. In order to reduce the heterogeneity of the different countries, we remove from the training sample a few countries whose income distributions are the most extreme. That is, countries with a high degree of income inequality or with very low median income, compared to the rest of the sample. The list of countries used in the regression are listed in \cref{A-datasets}. We nonetheless apply the imputation model to every country, whether they have been used to calibrate the model or not.
+
+We design two nested models, depending on the information available in the dataset. The first one is a generalized linear model where dependent variables are the medianized disposable income of the household, a few socio-demographic determinants (number of members in household and conjugal status of head), and a binary variable indicating whether the household is under the monetary poverty threshold. This threshold is defined as 60\% of the median equivalized income. Therefore, a household is under the poverty threshold if its medianized disposable income is under 0.6. This indicator has been added in order to account for the fact that, for lowest incomes, levels of consumption tend to be less correlated (even not correlated) with income [référence à ajouter]. Therefore, this indicator allows to account for different consumption patterns of poor households.
+\begin{equation}
+\label{equ:mod1}
+    \log(\widehat{hmc}) = \alpha_0 +\beta_0\log(\widehat{dhi})
+    + \mathbbm{1}_{pov}\cdot\left[\alpha_1 + \beta_1\log(\widehat{dhi})\right] + \Gamma^\intercal X + \epsilon
+    \tag{mod.\ 1}
+\end{equation}
+
+In the second nested model, we add some socio-demographic determinants (number of people aged 65 or older, number of wage income-earners in household, housing ownership status). Moreover, we add another monetary variable that is the total imputed or effective cost of housing. This amount may correspond to actual money spent by the household in rentals, or to non-monetary consumption for housing services (e.g.\ imputed rents for occupying owners). This variable is much more widely available in households surveys than total consumption, and is a good proxy of the standard of living of the household. Therefore, it carries valuable information on the amount of consumption of the household. The second model is thus:
+\begin{equation}
+\label{equ:mod2}
+    \log(\widehat{hmc}) = \alpha_0 +\beta_0\log(\widehat{dhi})
+    + \mathbbm{1}_{pov}\cdot\left[\alpha_1 + \beta_1\log(\widehat{dhi})\right]
+    + \delta\log(\widehat{housing}) + \Theta^\intercal Y + \epsilon
+    \tag{mod.\ 2}
+\end{equation}
+
+With this regression model, we impute medianized values of the households' monetary consumption. It is then scaled with national accounts data in order to be comparable with observed values, according to section \ref{subsub:prop}.
+
 \section{Robustness checks}
 \subsection{Different definitions of effective tax rate}
 \label{appendix_itrc}
 
 \begin{figure}[!ht]
 \centering
-\includegraphics[width=0.9\textwidth]{"images/18-09 itrc_comparison"}
+\includegraphics[width=0.9\textwidth]{images/18-09_itrc_comparison}
 \caption{Mean of implicit tax rates on consumption for each country.}
 \label{fig:itrc_comparison}  
 \end{figure}
@@ -34,7 +111,7 @@ The choice of removing or not rents from the denominator depends on the definiti
 \label{sec:rents}
 \begin{figure}[!h]
 \centering
-\includegraphics[height=0.4\textheight]{"images/18-11-18 total_nonrent_propensity fr10"}
+\includegraphics[height=0.4\textheight]{images/18-11-18_total_nonrent_propensity_fr10}
 \caption{Rents represent a higher share of consumption at the bottom of the income distribution (France 2010)}
 \label{fig:total_nonrent}  
 \end{figure}
@@ -52,6 +129,34 @@ As shown in \cref{fig:kakrent}, estimated regressivity is reduced when rents are
 \caption{\label{fig:kakrent} Mean value of Kakwani index whether taxable consumption includes rentals}
 \end{figure}
 
+\subsection{Progressive consumption tax rates: test of the bundle effect}
+\label{sec:diff_rates}  
+Many countries enforce reduced VAT rates for some goods, either in order to boost some economic sectors or to lighten the amount of consumption taxes paid by least affluent households. On the other hand, some goods are more heavily taxed, such as oil or alcohol.
+
+These variations on statutory tax rates can affect the overall progressivity of the tax, as the baskets of goods are different at one point or another of the income distribution. As a robustness check, we design two scenarios, where the effective tax rate is increasing with income. These situations would occur if tax rates had been specifically designed to make consumption taxes more progressive, as it is generally the case. These scenarios introduce a deviation from the median effective tax rate that depends linearly on the percentile of income. In the intermediate scenario, the first percentile of income enjoys an 0.5 percentage points lower effective tax rate than the median household, while the last percentile faces a 0.5 points higher tax rate, so that there is a 1 percentage point difference between the effective tax rate paid by poorest households and richest households. We also provide an extreme scenario where the gap between effective consumption tax rates at both ends is 2 percentage points. Those gaps are in accordance with national case studies that compute effective tax rates depending on income. %TODO : ajouter référence sur les effective tax rates selon décile
+
+We show in \cref{fig:diff_rates} the distribution of tax-to-income ratios by percentiles of income. This allows to compare different situations, from the least progressive to the more progressive. In the first situation, we assume that all goods and services (including housing) would be taxed at the same effective tax rates for all households. The regressive pattern then comes exclusively from the propensity to consume. In the second curve, consumption taxes are applied only on non-housing consumption, which mitigates the regressive pattern (as seen in \cref{sec:rents}). The third and fourth curves introduce progressive consumption taxes according to the intermediate and extreme scenarios.
+
+The curves are very close to one another: this confirms that the ` propensity to consume'' effect is the first order effect. Indeed, simulating an aggregated amount of consumption for each household allows to capture most of the regressivity of consumption taxes. When added the fact that housing consumption is not uniformly distributed, a uniform effective tax rate is even closer to the two scenarios of progressive tax rates.
+
+Eventually, the first and last curves yield upper and lower bounds for the regressivity of consumption taxes. Indeed, we know that using the same effective tax rate for every household, and not taking into account the fact that housing is not subject to consumption taxes actually yields an overestimation of the regressivity of consumption taxes. On the other hand, when we take housing rentals into account and we apply a strong progressivity to effective consumption tax rates, we know that this yields a lower bound of the regressive effect. We can observe that even in the extreme scenario, tax-to-income ratios still present a strong regressive pattern.
+
+The same can be said when looking at measures of redistribution and inequality. \Cref{fig:sum_diff_rates} shows that a constant effective tax rate on whole consumption produces the highest post-tax Gini index (overestimating the eventual income inequality). Adding the information on rent captures most of the difference between the latter and both progressive scenarios. In every case, we observe that all those measures of post-tax income inequality are much closer to one another than to the inequality of disposable income. Qualitatively, the anti-redistributive effect stays significant, and the first and simplest measure provides a quite tight upper bound.
+
+\begin{figure}[!ht]
+\centering
+\includegraphics[height=0.45\textheight]{"images/20-01 diff_rates"}
+\caption{Tax-to-income ratios for France 2010. Medium scenario: 1 pct point difference between effective consumption tax rates of the richest and the least affluent. Extreme scenario: 2 pct points difference}
+\label{fig:diff_rates}  
+\end{figure}
+
+\begin{figure}[!h]
+\centering
+\includegraphics[width=0.90\textwidth]{"images/19-11_fr10_sum_diff_rates"}
+\caption{Gini indices of income inequality for France 2010. Medium scenario: 1 pct point difference between effective consumption tax rates of the richest and the least affluent. Extreme scenario: 2 pct points difference}
+\label{fig:sum_diff_rates}  
+\end{figure}
+
 \subsection{Imputation error on consumption depending on the model}
 \label{sec:compare_models}
 \Cref{fig:compare_models} shows the R2 coefficient for 57 countries-years where imputed and observed values of consumption can be compared. Out of the 57 country-years for which we impute consumption both with \eqref{equ:mod1} and \eqref{equ:mod2}, we observe that model 2 increases the explained variance for 54 of them. On average, it is increased by 33\%, as measured by the R2 coefficient. Overall, the R2 coefficient for model 2 is 0.45 on average, being larger than 0.36 for 75\% of country-years, and larger than 0.56 for a quarter of our observations.
@@ -60,20 +165,9 @@ This shows that the independent variable ``cost of housing'', which is the main 
 
 \begin{figure}[!h]
 \centering
-\includegraphics[width=\textwidth]{"images/19-04-05 R2 compare models"}
+\includegraphics[width=\textwidth]{images/19-04-05_R2_compare_models}
 \caption{Explained variance in the two models for various countries}
 \label{fig:compare_models}  
-\end{figure}
-
-
-\subsection{Prediction error for redistributive impact}
-\label{sec:imputation_error}
-The imputation model produces reliable estimates of post-tax Gini coefficients.
-\begin{figure}
-    \centering
-    \includegraphics[height=0.45\textheight]{"images/19-02 prediction error ours mod2"}
-    \caption{Actual and predicted Gini coefficient of post-consumption-tax income}
-    \label{fig:prediction_error}
 \end{figure}
 
 \section{Decomposition of redistributive effect}
@@ -97,7 +191,7 @@ By definition, the reranking $Re$ is non-negative, so by \cref{equ:g_diff} the R
 
 \begin{figure}
     \centering
-    \includegraphics[width=\textwidth]{"images/19-02 decomposition effective redistribution"}
+    \includegraphics[width=\textwidth]{images/19-02_decomposition_effective_redistribution}
     \caption{Decomposition of redistributive effect}
     \label{fig:reranking}
 \end{figure}
@@ -126,7 +220,7 @@ We compute the Kakwani index for all the datasets where consumption data is avai
 Based on the different tax rates that we have computed earlier, we are now able to frame the possible values of the RS index. As summed up in \cref{fig:RS_scenarii}, most values for the Reynolds-Smolensky index will lie between -0.02 and -0.08.
 \begin{figure}
 	\centering
-	\includegraphics[scale=0.8]{"images/18-12 RS_scenarii"}
+	\includegraphics[scale=0.8]{images/18-12_RS_scenarii}
 	\caption{Value of Reynolds-Smolensky index depending on tax rate and Kakwani index}
 	\label{fig:RS_scenarii}
 \end{figure}

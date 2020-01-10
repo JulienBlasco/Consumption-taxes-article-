@@ -1,0 +1,11 @@
+build/
+images/*-eps-converted-to.pdf
+main.pdf
+
+*.toc
+*.synctex.gz
+*.out
+*.log
+*.aux
+*.blg
+*.bbl
